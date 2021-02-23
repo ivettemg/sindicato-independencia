@@ -1,0 +1,569 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package mx.com.evoti.presentacion.banco;
+
+import java.io.Serializable;
+import java.math.BigInteger;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+import javax.faces.bean.ManagedBean;
+import javax.faces.bean.ViewScoped;
+import mx.com.evoti.bo.bancos.BancoAjustesBo;
+import mx.com.evoti.bo.exception.BusinessException;
+import mx.com.evoti.dto.bancos.BancosDto;
+import mx.com.evoti.dto.bancos.EstadoCuentaDto;
+import mx.com.evoti.hibernate.pojos.BancosConceptos;
+import mx.com.evoti.presentacion.BaseBean;
+import mx.com.evoti.util.Constantes;
+import mx.com.evoti.util.Util;
+import org.primefaces.event.RowEditEvent;
+import org.slf4j.LoggerFactory;
+
+/**
+ *
+ * @author Venette
+ */
+@ManagedBean(name = "bancoAjusteBean")
+@ViewScoped
+public class BancoAjusteBean extends BaseBean implements Serializable {
+
+    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(BancoAjusteBean.class);
+    private static final long serialVersionUID = 5188478880986645102L;
+
+    private BancoAjustesBo banAjBo;
+
+    private List<BancosDto> conceptsSistem;
+    private List<BancosDto> sistemSel;
+    private List<BancosDto> bancoFiltradas;
+    private List<EstadoCuentaDto> conceptEdoCta;
+    private List<EstadoCuentaDto> edoCtaSel;
+    private List<EstadoCuentaDto> edoCtaFiltradas;
+    private EstadoCuentaDto nuevoEdoCta;
+
+    private List<BancosConceptos> conceptos;
+
+    private Date fechaInicio;
+    private Date fechaFin;
+
+    private Double totalEdoCta;
+    private Double totalBanco;
+
+    private boolean pendientes;
+    private Double sumaEdoCtaSel;
+    private Double sumaBancoSel;
+
+    public BancoAjusteBean() {
+        banAjBo = new BancoAjustesBo();
+        getConceptosPantalla();
+    }
+
+    public void init() {
+
+    }
+
+    public void cargaReporte() {
+        try {
+            banAjBo.obtieneListasBanco(fechaInicio, fechaFin);
+
+            conceptsSistem = banAjBo.getLstBancos();
+            conceptEdoCta = banAjBo.getLstEstadosCuenta();
+
+            this.totalBanco = 0.0;
+            this.totalEdoCta = 0.0;
+
+            conceptsSistem.forEach(x -> {
+                this.totalBanco += x.getBanMonto();
+            });
+            conceptEdoCta.forEach(x -> {
+                this.totalEdoCta += x.getEcMonto();
+            });
+
+            this.totalBanco = Util.round(totalBanco);
+            this.totalEdoCta = Util.round(totalEdoCta);
+
+        } catch (BusinessException ex) {
+            LOGGER.error(ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Metodo que actualiza el pojo de EstadoCuenta, este metodo se llama cuando
+     * se actualiza alguno de los valores del lado de estado de cuenta
+     *
+     * @param event
+     */
+    public void onRowEditEC(RowEditEvent event) {
+        LOGGER.info("Dentro de onroweditec");
+
+        EstadoCuentaDto dto = (EstadoCuentaDto) event.getObject();
+
+        if (dto.getEcAjustado() == 0) {
+
+            try {
+                banAjBo.updtEstadoCuenta(dto);
+            } catch (BusinessException ex) {
+                super.muestraMensajeError("Hubo un error al actualizar el campo", "", null);
+                LOGGER.error(ex.getMessage(), ex);
+            }
+
+        } else {
+            super.muestraMensajeError("No puede actualizar un campo que ya está ajustado", "", null);
+        }
+        super.updtComponent("frmAjusteBanco:tblEC");
+
+    }
+
+    public void eliminaConcepto() {
+        if (this.edoCtaSel.isEmpty()) {
+            super.muestraMensajeError("Debe seleccionar un registro para borrar", "", null);
+        } else {
+
+            EstadoCuentaDto ecDto;
+
+            edoCtaSel.forEach(ec -> {
+
+                if (ec.getEcAjustado() == 0) {
+
+                    try {
+                        banAjBo.eliminaEC(ec);
+                        super.muestraMensajeExito("El concepto fue eliminado", "", null);
+                    } catch (BusinessException ex) {
+                        LOGGER.error(ex.getMessage(), ex);
+                    }
+
+                    cargaReporte();
+                } else {
+                    super.muestraMensajeError("No puede eliminar un concepto que ya está ajustado", "", null);
+                }
+            });
+        }
+
+    }
+
+    public void rowECSelect() {
+
+    }
+
+    public void rowECUnselect() {
+
+    }
+
+    public void agregaConceptoEdoCta() {
+        try {
+            banAjBo.guardaEdoCta(nuevoEdoCta);
+
+            cargaReporte();
+            super.hideShowDlg("PF('dlgAddConceptW').hide()");
+        } catch (BusinessException ex) {
+            super.muestraMensajeError("Hubo un error al guardar el concepto", "", null);
+            LOGGER.error(ex.getMessage(), ex);
+        }
+    }
+
+    private void getConceptosPantalla() {
+        try {
+            conceptos = banAjBo.getConceptos();
+        } catch (BusinessException ex) {
+            LOGGER.error(ex.getMessage(), ex);
+        }
+    }
+
+    public void initDlgAddCncp() {
+        this.nuevoEdoCta = new EstadoCuentaDto();
+        nuevoEdoCta.setEcAjustado(Constantes.EC_NO_AJUSTADO);
+
+        super.hideShowDlg("PF('dlgAddConceptW').show()");
+        super.updtComponent("dlgFrmAddConcept");
+
+    }
+
+    /**
+     * Metodo que se manda llamar al ejecutar el metodo Ajustar conceptos
+     */
+    public void ajustaConceptos() {
+        LOGGER.info("Dentro de ajusta conceptos");
+
+        this.sumaBancoSel = 0.0;
+        this.sumaEdoCtaSel = 0.0;
+        //Valida que haya registros en ambas listas
+        if (sistemSel != null && edoCtaSel != null) {
+
+            /**
+             * Valida que alguna de las dos listas tenga un solo registro y que
+             * ambas tengan registros
+             */
+            if (sistemSel.size() == 1 || edoCtaSel.size() == 1
+                    && (sistemSel.size() > 0 && edoCtaSel.size() > 0)) {
+
+                boolean bsAParcial = false;
+                boolean ecAParcial = false;
+                for (BancosDto bs : sistemSel) {
+                    if (bs.getBanAjustado() == 2) {
+                        bsAParcial = true;
+                    }
+                }
+                for (EstadoCuentaDto ecs : edoCtaSel) {
+                    if (ecs.getEcAjustado() == 2) {
+                        ecAParcial = true;
+                    }
+                }
+
+                if (bsAParcial && ecAParcial) {
+                    super.muestraMensajeError("No puede ajustar dos estatus que se encuentren parcialmente ajustados", "", null);
+                } else {
+
+                    pendientes = true;
+
+                    sistemSel.forEach(x -> {
+                        if (null != x.getBanAjustado()) //Valida que no este ajustado
+                        {
+                            switch (x.getBanAjustado()) {
+                                case 1:
+                                    pendientes = false;
+                                    break;
+                                case 0:
+                                    this.sumaBancoSel += x.getBanMonto();
+                                    break;
+                                case 2:
+                                    this.sumaBancoSel += banAjBo.getRestanteAjustParcial(x);
+                                    break;
+
+                            }
+                        }
+                    });
+
+                    edoCtaSel.forEach(x -> {
+                        if (null != x.getEcAjustado()) {
+                            switch (x.getEcAjustado()) {
+                                case 1:
+                                    pendientes = false;
+                                    break;
+                                case 0:
+                                    this.sumaEdoCtaSel += x.getEcMonto();
+                                    break;
+                                case 2:
+                                    this.sumaEdoCtaSel += banAjBo.getRestanteAjustParcial(x);
+                                    break;
+
+                            }
+                        }
+
+                    });
+
+                    /**
+                     * Valida que no haya seleccionado registros que ya estén
+                     * ajustados
+                     */
+                    if (!pendientes) {
+                        super.muestraMensajeError("No puede ajustar un concepto que ya esté ajustado", "", null);
+                    } else {
+                        try {
+                            //Cuando esta pendiente de ajustar o ajustado parcial
+                            Double diferencia = this.sumaEdoCtaSel - this.sumaBancoSel;
+
+                            if (diferencia <= 5 && diferencia >= -5) {
+
+                                //es exacto
+                                System.out.println("Es exacto");
+                                sistemSel.forEach(s -> {
+                                    s.setBanAjustado(Constantes.BAN_AJUSTADO);
+                                });
+
+                                this.edoCtaSel.forEach(s -> {
+                                    s.setEcAjustado(Constantes.EC_AJUSTADO);
+                                });
+
+                                banAjBo.persistRelBancoEC(sistemSel, edoCtaSel);
+
+                            } else //Cuando el concepto estado de cuenta es mayor
+                             if (sumaEdoCtaSel > sumaBancoSel && edoCtaSel.size() == 1) {
+                                    edoCtaSel.get(0).setEcAjustado(Constantes.EC_AJUSTADO_PARCIAL);
+
+                                    sistemSel.forEach(s -> {
+                                        s.setBanAjustado(Constantes.BAN_AJUSTADO);
+                                    });
+
+                                    this.edoCtaSel.forEach(s -> {
+                                        s.setEcAjustado(Constantes.EC_AJUSTADO_PARCIAL);
+                                    });
+
+                                    banAjBo.persistRelBancoEC(sistemSel, edoCtaSel);
+
+                                } else if (sumaBancoSel > sumaEdoCtaSel && sistemSel.size() == 1) {
+                                    sistemSel.get(0).setBanAjustado(Constantes.BAN_AJUSTADO_PARCIAL);
+
+                                    sistemSel.forEach(s -> {
+                                        s.setBanAjustado(Constantes.BAN_AJUSTADO_PARCIAL);
+                                    });
+
+                                    this.edoCtaSel.forEach(s -> {
+                                        s.setEcAjustado(Constantes.EC_AJUSTADO);
+                                    });
+
+                                    banAjBo.persistRelBancoEC(sistemSel, edoCtaSel);
+
+                                } else {
+                                    super.muestraMensajeError("No puede ajustar los campos seleccionados", "", null);
+                                }
+                            this.cargaReporte();
+
+                        } catch (BusinessException ex) {
+                            LOGGER.error(ex.getMessage(), ex);
+                        }
+                    }
+                }
+            } else {
+                super.muestraMensajeError("No puede ajustar los campos seleccionados", "", null);
+            }
+            this.sistemSel.clear();
+            this.edoCtaSel.clear();
+        } else {
+            super.muestraMensajeError("Debe seleccionar los conceptos que quiere relacionar", "", null);
+        }
+    }
+
+    /**
+     * Método que quita el ajuste de
+     */
+    public void quitarAjuste() {
+
+        if ((sistemSel.size() > 0 && edoCtaSel.size() > 0) || sistemSel.size() > 1 || edoCtaSel.size() > 1) {
+            super.muestraMensajeError("Solo puede seleccionar un registro para desajustar", "", null);
+
+        } else {
+            banAjBo.borraRelacion(sistemSel, edoCtaSel);
+
+        }
+
+        cargaReporte();
+
+    }
+
+    /**
+     * Metodo que calcula los totales de las summary rows
+     *
+     * @param ajustado
+     */
+    public void calcTotalEC(BigInteger ajustado) {
+
+        totalEdoCta = 0.0;
+        if (edoCtaFiltradas != null) {
+            if (!edoCtaFiltradas.isEmpty()) {
+                edoCtaFiltradas.forEach(ec -> {
+
+                    if (Objects.equals(ajustado, ec.getIdPantalla())) {
+                        totalEdoCta += Util.round(ec.getEcMonto());
+                    }
+
+                });
+            }
+        } else {
+
+            conceptEdoCta.forEach(ec -> {
+
+                if (Objects.equals(ajustado, ec.getIdPantalla())) {
+                    totalEdoCta += Util.round(ec.getEcMonto());
+                }
+
+            });
+        }
+    }
+
+    public void calcTotalBan(BigInteger ajustado) {
+
+        totalBanco = 0.0;
+        
+        if (this.bancoFiltradas != null) {
+            if (!bancoFiltradas.isEmpty()) {
+                bancoFiltradas.forEach(ban -> {
+
+                    if (Objects.equals(ajustado, ban.getIdPantalla())) {
+                        totalEdoCta += Util.round(ban.getBanMonto());
+                    }
+
+                });
+            }
+        } else {
+        conceptsSistem.forEach(ban -> {
+
+            if (Objects.equals(ajustado, ban.getIdPantalla())) {
+                totalBanco += Util.round(ban.getBanMonto());
+            }
+
+        });
+        }
+    }
+
+    /**
+     * @return the conceptsSistem
+     */
+    public List<BancosDto> getConceptsSistem() {
+        return conceptsSistem;
+    }
+
+    /**
+     * @param conceptsSistem the conceptsSistem to set
+     */
+    public void setConceptsSistem(List<BancosDto> conceptsSistem) {
+        this.conceptsSistem = conceptsSistem;
+    }
+
+    /**
+     * @return the sistemSel
+     */
+    public List<BancosDto> getSistemSel() {
+        return sistemSel;
+    }
+
+    /**
+     * @param sistemSel the sistemSel to set
+     */
+    public void setSistemSel(List<BancosDto> sistemSel) {
+        this.sistemSel = sistemSel;
+    }
+
+    /**
+     * @return the edoCtaSel
+     */
+    public List<EstadoCuentaDto> getEdoCtaSel() {
+        return edoCtaSel;
+    }
+
+    /**
+     * @param edoCtaSel the edoCtaSel to set
+     */
+    public void setEdoCtaSel(List<EstadoCuentaDto> edoCtaSel) {
+        this.edoCtaSel = edoCtaSel;
+    }
+
+    /**
+     * @return the conceptEdoCta
+     */
+    public List<EstadoCuentaDto> getConceptEdoCta() {
+        return conceptEdoCta;
+    }
+
+    /**
+     * @param conceptEdoCta the conceptEdoCta to set
+     */
+    public void setConceptEdoCta(List<EstadoCuentaDto> conceptEdoCta) {
+        this.conceptEdoCta = conceptEdoCta;
+    }
+
+    /**
+     * @return the fechaInicio
+     */
+    public Date getFechaInicio() {
+        return fechaInicio;
+    }
+
+    /**
+     * @param fechaInicio the fechaInicio to set
+     */
+    public void setFechaInicio(Date fechaInicio) {
+        this.fechaInicio = fechaInicio;
+    }
+
+    /**
+     * @return the fechaFin
+     */
+    public Date getFechaFin() {
+        return fechaFin;
+    }
+
+    /**
+     * @param fechaFin the fechaFin to set
+     */
+    public void setFechaFin(Date fechaFin) {
+        this.fechaFin = fechaFin;
+    }
+
+    /**
+     * @return the totalEdoCta
+     */
+    public Double getTotalEdoCta() {
+        return totalEdoCta;
+    }
+
+    /**
+     * @param totalEdoCta the totalEdoCta to set
+     */
+    public void setTotalEdoCta(Double totalEdoCta) {
+        this.totalEdoCta = totalEdoCta;
+    }
+
+    /**
+     * @return the totalBanco
+     */
+    public Double getTotalBanco() {
+        return totalBanco;
+    }
+
+    /**
+     * @param totalBanco the totalBanco to set
+     */
+    public void setTotalBanco(Double totalBanco) {
+        this.totalBanco = totalBanco;
+    }
+
+    /**
+     * @return the conceptos
+     */
+    public List<BancosConceptos> getConceptos() {
+        return conceptos;
+    }
+
+    /**
+     * @param conceptos the conceptos to set
+     */
+    public void setConceptos(List<BancosConceptos> conceptos) {
+        this.conceptos = conceptos;
+    }
+
+    /**
+     * @return the nuevoEdoCta
+     */
+    public EstadoCuentaDto getNuevoEdoCta() {
+        return nuevoEdoCta;
+    }
+
+    /**
+     * @param nuevoEdoCta the nuevoEdoCta to set
+     */
+    public void setNuevoEdoCta(EstadoCuentaDto nuevoEdoCta) {
+        this.nuevoEdoCta = nuevoEdoCta;
+    }
+
+    /**
+     * @return the bancoFiltradas
+     */
+    public List<BancosDto> getBancoFiltradas() {
+        return bancoFiltradas;
+    }
+
+    /**
+     * @param bancoFiltradas the bancoFiltradas to set
+     */
+    public void setBancoFiltradas(List<BancosDto> bancoFiltradas) {
+        this.bancoFiltradas = bancoFiltradas;
+    }
+
+    /**
+     * @return the edoCtaFiltradas
+     */
+    public List<EstadoCuentaDto> getEdoCtaFiltradas() {
+        return edoCtaFiltradas;
+    }
+
+    /**
+     * @param edoCtaFiltradas the edoCtaFiltradas to set
+     */
+    public void setEdoCtaFiltradas(List<EstadoCuentaDto> edoCtaFiltradas) {
+        this.edoCtaFiltradas = edoCtaFiltradas;
+    }
+
+}

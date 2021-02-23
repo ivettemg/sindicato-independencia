@@ -1,0 +1,98 @@
+package mx.com.evoti.presentacion.solicitudes;
+
+import java.io.Serializable;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.faces.bean.ManagedBean;
+import javax.faces.bean.ViewScoped;
+import mx.com.evoti.bo.CreditosBo;
+import mx.com.evoti.bo.HistorialSolicitudesBo;
+import mx.com.evoti.bo.exception.BusinessException;
+import mx.com.evoti.dao.exception.IntegracionException;
+import mx.com.evoti.dao.solicitudes.HistorialDao;
+import mx.com.evoti.dto.HistorialSolicitudesDto;
+import mx.com.evoti.presentacion.BaseBean;
+import org.slf4j.LoggerFactory;
+
+@ManagedBean(name = "historialBean")
+@ViewScoped
+public class HistorialBean extends BaseBean implements Serializable {
+
+    private static final long serialVersionUID = 5216692439496179076L;
+    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(HistorialBean.class);
+    
+    private List<HistorialSolicitudesDto> historialSolicitudes;
+    private List<HistorialSolicitudesDto> detalleSolicitud;
+    private HistorialSolicitudesDto solSelected;
+    
+    private HistorialSolicitudesBo solBo;
+
+    public void init() {
+        try {
+            System.out.println("init");
+
+            HistorialDao hdao = new HistorialDao();
+            this.historialSolicitudes = hdao.getHistorial();
+        } catch (IntegracionException ex) {
+            Logger.getLogger(HistorialBean.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+    
+        public void abreDetalleSolicitud() {
+
+        try {
+            solBo = new HistorialSolicitudesBo();
+            if (solSelected != null) {
+                this.setDetalleSolicitud(solBo.getDetalleSolicitud(solSelected.getFolio()));
+            }
+            super.hideShowDlg("PF('dlgDetalleSolicitudW').show()");
+        } catch (BusinessException ex) {
+            LOGGER.error(ex.getMessage(), ex);
+        }
+
+    }
+
+    /**
+     * @return the historialSolicitudes
+     */
+    public List<HistorialSolicitudesDto> getHistorialSolicitudes() {
+        return historialSolicitudes;
+    }
+
+    /**
+     * @param historialSolicitudes the historialSolicitudes to set
+     */
+    public void setHistorialSolicitudes(List<HistorialSolicitudesDto> historialSolicitudes) {
+        this.historialSolicitudes = historialSolicitudes;
+    }
+
+    /**
+     * @return the solSelected
+     */
+    public HistorialSolicitudesDto getSolSelected() {
+        return solSelected;
+    }
+
+    /**
+     * @param solSelected the solSelected to set
+     */
+    public void setSolSelected(HistorialSolicitudesDto solSelected) {
+        this.solSelected = solSelected;
+    }
+
+    /**
+     * @return the detalleSolicitud
+     */
+    public List<HistorialSolicitudesDto> getDetalleSolicitud() {
+        return detalleSolicitud;
+    }
+
+    /**
+     * @param detalleSolicitud the detalleSolicitud to set
+     */
+    public void setDetalleSolicitud(List<HistorialSolicitudesDto> detalleSolicitud) {
+        this.detalleSolicitud = detalleSolicitud;
+    }
+
+}

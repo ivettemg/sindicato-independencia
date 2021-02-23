@@ -1,0 +1,579 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package mx.com.evoti.bo.bancos;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import mx.com.evoti.bo.exception.BusinessException;
+import mx.com.evoti.dao.bancos.BancosDao;
+import mx.com.evoti.dao.exception.IntegracionException;
+import mx.com.evoti.dto.bancos.BancosConceptosDto;
+import mx.com.evoti.dto.bancos.BancosDto;
+import mx.com.evoti.dto.bancos.EstadoCuentaDto;
+import mx.com.evoti.dto.bancos.dao.BancosEstadoCtaDto;
+import mx.com.evoti.hibernate.pojos.BancoEdocta;
+import mx.com.evoti.hibernate.pojos.BancoEdoctaId;
+import mx.com.evoti.hibernate.pojos.Bancos;
+import mx.com.evoti.hibernate.pojos.BancosConceptos;
+import mx.com.evoti.hibernate.pojos.EstadoCuenta;
+import mx.com.evoti.util.Constantes;
+import mx.com.evoti.util.Util;
+import org.slf4j.LoggerFactory;
+
+/**
+ *
+ * @author Venette
+ */
+public class BancoAjustesBo implements Serializable {
+
+    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(BancoAjustesBo.class);
+    private static final long serialVersionUID = -604848521024535467L;
+
+    private BancosDao banDao;
+
+    private List<BancosEstadoCtaDto> ajustadosOriginal;
+    private List<BancosDto> lstBancos;
+    private List<EstadoCuentaDto> lstEstadosCuenta;
+    private Double totalBanco;
+    private Double totalEdoCta;
+
+    private List<BancosEstadoCtaDto> lstBorraBanco;
+    private List<BancosEstadoCtaDto> lstBorraEC;
+
+    public BancoAjustesBo() {
+        banDao = new BancosDao();
+    }
+
+    /**
+     * Obtiene las listas que se mostrarán el en el ajuste de bancos
+     *
+     * @param fechaInicio
+     * @param fechaFin
+     * @throws BusinessException
+     */
+    public void obtieneListasBanco(Date fechaInicio, Date fechaFin) throws BusinessException {
+        try {
+            ajustadosOriginal = banDao.getBancoEdoCtaAjustados(fechaInicio, fechaFin);
+
+            lstBancos = new ArrayList<>();
+            lstEstadosCuenta = new ArrayList<>();
+
+            List<BancosDto> lstBanLcl = new ArrayList<>();
+            List<EstadoCuentaDto> lstEdoCtaLcl = new ArrayList<>();
+
+            ajustadosOriginal.forEach(a -> {
+                lstBanLcl.add(creaBancoDto(a));
+                lstEdoCtaLcl.add(creaEdoCtaDto(a));
+
+            });
+
+            /**
+             * Elimina repetidos en las listas
+             */
+            agrupaListas(lstBanLcl, lstEdoCtaLcl);
+
+            //Asigna los ids de los estados de cuenta referenciados a ese banco
+            for (BancosDto ban : lstBancos) {
+                String ids = "";
+                for (BancosEstadoCtaDto ajus : ajustadosOriginal) {
+
+                    if (Objects.equals(ban.getBanId(), ajus.getBanId())) {
+                        ids += ajus.getEcId() + " ";
+                    }
+
+                }
+                ban.setEcId(ids);
+            }
+
+            //Añade los registros que tienen estatus pendiente
+            lstBancos.addAll(banDao.getBancoPendts(fechaInicio, fechaFin));
+            lstEstadosCuenta.addAll(banDao.getEdoCtaPendts(fechaInicio, fechaFin));
+
+            lstEstadosCuenta.forEach(x -> {
+
+                if (x.getConcepto() == null) {
+                    BancosConceptosDto bcDto = new BancosConceptosDto();
+                    bcDto.setCbanId(x.getEcConcepto());
+                    bcDto.setCbanNombre(x.getStrConcepto());
+                    x.setConcepto(bcDto);
+                }
+
+                switch (x.getEcAjustado()) {
+                    case 1:
+                        x.setColor(Constantes.COL_AJUSTADO);
+                        break;
+                    case 2:
+                        x.setColor(Constantes.COL_AJUSTADO_PARCIAL);
+                        break;
+                }
+
+            });
+
+            lstBancos.forEach(x -> {
+
+                switch (x.getBanAjustado()) {
+                    case 1:
+                        x.setColor(Constantes.COL_AJUSTADO);
+                        break;
+                    case 2:
+                        x.setColor(Constantes.COL_AJUSTADO_PARCIAL);
+                        break;
+                }
+
+            });
+
+        } catch (IntegracionException ex) {
+            throw new BusinessException(ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Metodo que devuelve el monto restante de un concepto parcialmente
+     * ajustado
+     *
+     * @param dto
+     * @return
+     */
+    public Double getRestanteAjustParcial(Object dto) {
+        Double restante = 0.0;
+        Double suma = 0.0;
+
+        if (dto instanceof BancosDto) {
+            BancosDto banco = (BancosDto) dto;
+
+            //Si es banco, suma los de estado de cuenta
+            for (BancosEstadoCtaDto becDto : ajustadosOriginal) {
+                if (Objects.equals(becDto.getBanId(), banco.getBanId())) {
+                    suma += becDto.getEcMonto();
+                }
+            }
+
+            restante = Util.round(banco.getBanMonto() - suma);
+
+        } else if (dto instanceof EstadoCuentaDto) {
+            EstadoCuentaDto edoCta = (EstadoCuentaDto) dto;
+
+            //Si es de estado de cuenta, suma bancos
+            for (BancosEstadoCtaDto becDto : ajustadosOriginal) {
+                if (Objects.equals(becDto.getEcId(), edoCta.getEcId())) {
+                    suma += becDto.getBanMonto();
+                }
+            }
+
+            restante = Util.round(edoCta.getEcMonto() - suma);
+        }
+
+        return restante;
+    }
+
+    public BancosDto creaBancoDto(BancosEstadoCtaDto becDto) {
+        BancosDto banco = new BancosDto();
+
+        banco.setBanAjustado(becDto.getBanAjustado());
+        banco.setBanConcepto(becDto.getBanConcepto());
+        banco.setBanEmpresa(becDto.getBanEmpresa());
+        banco.setBanFechatransaccion(becDto.getBanFechatransaccion());
+        banco.setBanId(becDto.getBanId());
+        banco.setBanIdConceptoSistema(becDto.getBanIdConceptoSistema());
+        banco.setBanMonto(becDto.getBanMonto() != null ? becDto.getBanMonto() : 0.0);
+        banco.setConcepto(becDto.getConceptoBanco());
+        banco.setBanEmpresaStri(becDto.getBanEmpresaStri());
+
+        return banco;
+    }
+
+    public EstadoCuentaDto creaEdoCtaDto(BancosEstadoCtaDto becDto) {
+        EstadoCuentaDto edoCta = new EstadoCuentaDto();
+
+        BancosConceptosDto bcDto = new BancosConceptosDto();
+        bcDto.setCbanId(becDto.getEcConcepto());
+        bcDto.setCbanNombre(becDto.getConceptoEdoCta());
+
+        edoCta.setConcepto(bcDto);
+        edoCta.setEcAjustado(becDto.getEcAjustado());
+        edoCta.setEcConcepto(becDto.getEcConcepto());
+        edoCta.setEcDescripcion(becDto.getEcDescripcion());
+        edoCta.setEcEmpresa(becDto.getEcEmpresa());
+        edoCta.setEcFechatransaccion(becDto.getEcFechatransaccion());
+        edoCta.setEcId(becDto.getEcId());
+        edoCta.setEcMonto(becDto.getEcMonto() != null ? becDto.getEcMonto() : 0.0);
+        edoCta.setEcPadre(becDto.getEcPadre());
+        edoCta.setEdoCtaEmpresa(becDto.getEdoCtaEmpresa());
+
+        return edoCta;
+    }
+
+    /**
+     * Elimina los repetidos de las listas que se mostrarán en pantalla
+     *
+     * @param lstBan
+     * @param lstEdoCta
+     */
+    public void agrupaListas(List<BancosDto> lstBan, List<EstadoCuentaDto> lstEdoCta) {
+
+        Map<Integer, BancosDto> mapBancos = new HashMap<>(lstBan.size());
+        Map<Integer, EstadoCuentaDto> mapEdoCta = new HashMap<>(lstEdoCta.size());
+
+        lstBan.stream().forEach((BancosDto mban) -> {
+            mapBancos.put(mban.getBanId(), mban);
+        });
+
+        lstEdoCta.stream().forEach((EstadoCuentaDto mec) -> {
+            mapEdoCta.put(mec.getEcId(), mec);
+        });
+
+        mapBancos.forEach((id, ban) -> {
+            lstBancos.add(ban);
+        });
+
+        mapEdoCta.forEach((id, ec) -> {
+            lstEstadosCuenta.add(ec);
+        });
+
+    }
+
+    /**
+     *
+     * @return @throws BusinessException
+     */
+    public List<BancosConceptos> getConceptos() throws BusinessException {
+        try {
+            return banDao.getConceptos();
+        } catch (IntegracionException ex) {
+            throw new BusinessException(ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Metodo que guarda los registros necesarios en la tabla banco_edocta y
+     * actualiza las tablas Bancos y Estado_cuenta con un nuevo estatus
+     *
+     * @param lstBan
+     * @param lstEc
+     * @throws BusinessException
+     */
+    public void persistRelBancoEC(List<BancosDto> lstBan, List<EstadoCuentaDto> lstEc) throws BusinessException {
+        try {
+
+            for (BancosDto ban : lstBan) {
+                for (EstadoCuentaDto ec : lstEc) {
+
+                    BancoEdoctaId id = new BancoEdoctaId(ban.getBanId(), ec.getEcId());
+                    BancoEdocta bec = new BancoEdocta(id, new Date());
+
+                    banDao.saveBancoEdoCta(bec);
+
+                    banDao.updtBanco(transDtoToPojoBan(ban));
+                    banDao.updtEstadoCta(transDtoToPojoEC(ec));
+
+                }
+            }
+
+        } catch (IntegracionException ex) {
+            throw new BusinessException(ex.getMessage(), ex);
+        }
+    }
+
+    private Bancos transDtoToPojoBan(BancosDto dto) {
+        Bancos pojo = new Bancos();
+        pojo.setBanAjustado(dto.getBanAjustado());
+        pojo.setBanConcepto(dto.getBanConcepto());
+        pojo.setBanEmpresa(dto.getBanEmpresa());
+        pojo.setBanFechatransaccion(dto.getBanFechatransaccion());
+        pojo.setBanId(dto.getBanId());
+        pojo.setBanIdConceptoSistema(dto.getBanIdConceptoSistema());
+        pojo.setBanMonto(dto.getBanMonto());
+
+        return pojo;
+    }
+
+    private EstadoCuenta transDtoToPojoEC(EstadoCuentaDto dto) {
+        EstadoCuenta pojo = new EstadoCuenta();
+
+        pojo.setEcAjustado(dto.getEcAjustado());
+        pojo.setEcConcepto(dto.getEcConcepto());
+        pojo.setEcDescripcion(dto.getEcDescripcion());
+        pojo.setEcEmpresa(dto.getEcEmpresa());
+        pojo.setEcFechatransaccion(dto.getEcFechatransaccion());
+        pojo.setEcId(dto.getEcId());
+        pojo.setEcMonto(dto.getEcMonto());
+        pojo.setEcPadre(dto.getEcPadre());
+
+        return pojo;
+    }
+
+    public void borraRelacion(List<BancosDto> sistemSel, List<EstadoCuentaDto> edoCtaSel) {
+        lstBorraBanco = new ArrayList<>();
+        lstBorraEC = new ArrayList<>();
+
+        edoCtaSel.forEach((ec) -> {
+            try {
+                quitarAjuste(null, ec.getEcId());
+            } catch (BusinessException ex) {
+                LOGGER.error(ex.getMessage(), ex);
+            }
+
+        });
+
+        sistemSel.forEach((ban) -> {
+            try {
+                quitarAjuste(ban.getBanId(), null);
+            } catch (BusinessException ex) {
+                LOGGER.error(ex.getMessage(), ex);
+            }
+        });
+
+    }
+
+    public void quitarAjuste(Integer banId, Integer ecId) throws BusinessException {
+
+        if (banId != null) {
+            BancosEstadoCtaDto banco = getBancos(banId);
+
+            if (banco != null) {
+                BancosEstadoCtaDto ec = getECS(banco.getEcId());
+
+                if (ec != null) {
+                    quitarAjuste(ec.getBanId(), ecId);
+                } else {
+                    BancosEstadoCtaDto banco2 = getBancos(banco.getEcId());
+
+                    if (banco2 != null) {
+                        quitarAjuste(banId, banco2.getEcId());
+                    }
+                }
+            }
+
+        } else {
+            BancosEstadoCtaDto ec = getECS(ecId);
+
+            if (ec != null) {
+                BancosEstadoCtaDto banco = getBancos(ec.getBanId());
+
+                if (banco != null) {
+                    quitarAjuste(banId, banco.getEcId());
+                } else {
+                    BancosEstadoCtaDto ec2 = getECS(ec.getEcId());
+
+                    if (ec2 != null) {
+                        quitarAjuste(ec2.getBanId(), ecId);
+                    }
+
+                }
+            }
+        }
+    }
+
+    
+    public BancosEstadoCtaDto getECS(Integer ecId) throws BusinessException {
+
+        List<BancosEstadoCtaDto> lst = ajustadosOriginal.stream().filter(bec -> Objects.equals(ecId, bec.getEcId())).collect(Collectors.toList());
+
+        actualizaBD(lst);
+
+        if (!lst.isEmpty() && lst.size() == 1) {
+            return lst.get(0);
+        } else {
+            return null;
+        }
+
+    }
+
+    /**
+     * Obtiene un BancosEstadoCtaDto que corresponde a un registro de bancos
+     *
+     * @param banId
+     * @return
+     * @throws mx.com.evoti.bo.exception.BusinessException
+     */
+    public BancosEstadoCtaDto getBancos(Integer banId) throws BusinessException {
+
+        List<BancosEstadoCtaDto> lst = ajustadosOriginal.stream().filter(bec -> Objects.equals(banId, bec.getBanId())).collect(Collectors.toList());
+
+        actualizaBD(lst);
+
+        if (!lst.isEmpty() && lst.size() == 1) {
+            return lst.get(0);
+        } else {
+            return null;
+        }
+    }
+
+    public void actualizaBD(List<BancosEstadoCtaDto> lst) throws BusinessException {
+        for (BancosEstadoCtaDto dto : lst) {
+
+            try {
+                banDao.updtEstatusEC(dto.getEcId(), Constantes.EC_NO_AJUSTADO);
+                banDao.updtEstatusBanco(dto.getBanId(), Constantes.BAN_NO_AJUSTADO);
+                banDao.deleteBEC(dto.getEcId(), dto.getBanId());
+                ajustadosOriginal = ajustadosOriginal.stream().filter(a -> !Objects.equals(a, dto)).collect(Collectors.toList());
+            } catch (IntegracionException ex) {
+                throw new BusinessException(ex.getMessage(), ex);
+            }
+
+        }
+    }
+    
+    
+     public void updtEstadoCuenta(EstadoCuentaDto dto) throws BusinessException {
+         EstadoCuenta pojo = this.transDtoToPojoEC(dto);
+         
+        try {
+            banDao.updtEstadoCta(pojo);
+        } catch (IntegracionException ex) {
+            throw new BusinessException(ex.getMessage(), ex);
+        }
+    }
+    
+
+      public void eliminaEC(EstadoCuentaDto ec) throws BusinessException {
+        try {   
+            banDao.eliminaEC(ec);
+        } catch (IntegracionException ex) {
+           throw new BusinessException(ex.getMessage(), ex);
+        }
+    }
+     
+    /**
+     * @return the ajustadosOriginal
+     */
+    public List<BancosEstadoCtaDto> getAjustadosOriginal() {
+        return ajustadosOriginal;
+    }
+
+    /**
+     * @param ajustadosOriginal the ajustadosOriginal to set
+     */
+    public void setAjustadosOriginal(List<BancosEstadoCtaDto> ajustadosOriginal) {
+        this.ajustadosOriginal = ajustadosOriginal;
+    }
+
+    /**
+     * @return the lstBancos
+     */
+    public List<BancosDto> getLstBancos() {
+        return lstBancos;
+    }
+
+    /**
+     * @param lstBancos the lstBancos to set
+     */
+    public void setLstBancos(List<BancosDto> lstBancos) {
+        this.lstBancos = lstBancos;
+    }
+
+    /**
+     * @return the lstEstadosCuenta
+     */
+    public List<EstadoCuentaDto> getLstEstadosCuenta() {
+        return lstEstadosCuenta;
+    }
+
+    /**
+     * @param lstEstadosCuenta the lstEstadosCuenta to set
+     */
+    public void setLstEstadosCuenta(List<EstadoCuentaDto> lstEstadosCuenta) {
+        this.lstEstadosCuenta = lstEstadosCuenta;
+    }
+
+    /**
+     * @return the totalBanco
+     */
+    public Double getTotalBanco() {
+        return totalBanco;
+    }
+
+    /**
+     * @param totalBanco the totalBanco to set
+     */
+    public void setTotalBanco(Double totalBanco) {
+        this.totalBanco = totalBanco;
+    }
+
+    /**
+     * @return the totalEdoCta
+     */
+    public Double getTotalEdoCta() {
+        return totalEdoCta;
+    }
+
+    /**
+     * @param totalEdoCta the totalEdoCta to set
+     */
+    public void setTotalEdoCta(Double totalEdoCta) {
+        this.totalEdoCta = totalEdoCta;
+    }
+
+    /**
+     * Guarda en base de datos un dto de estado de cuenta
+     *
+     * @param nuevoEdoCta
+     * @throws BusinessException
+     */
+    public void guardaEdoCta(EstadoCuentaDto nuevoEdoCta) throws BusinessException {
+        try {
+            this.banDao.saveEstadoCuenta(trfmDtoToPojo(nuevoEdoCta));
+        } catch (IntegracionException ex) {
+            throw new BusinessException(ex.getMessage(), ex);
+        }
+
+    }
+
+    public EstadoCuenta trfmDtoToPojo(EstadoCuentaDto dto) {
+        EstadoCuenta pojo = new EstadoCuenta();
+
+        pojo.setEcAjustado(dto.getEcAjustado());
+        pojo.setEcConcepto(dto.getBanConceptoId());
+        pojo.setEcDescripcion(dto.getEcDescripcion());
+        pojo.setEcEmpresa(dto.getEcEmpresa());
+        pojo.setEcFechatransaccion(dto.getEcFechatransaccion());
+        pojo.setEcMonto(dto.getEcMonto());
+
+        return pojo;
+
+    }
+
+    /**
+     * @return the lstBorraBanco
+     */
+    public List<BancosEstadoCtaDto> getLstBorraBanco() {
+        return lstBorraBanco;
+    }
+
+    /**
+     * @param lstBorraBanco the lstBorraBanco to set
+     */
+    public void setLstBorraBanco(List<BancosEstadoCtaDto> lstBorraBanco) {
+        this.lstBorraBanco = lstBorraBanco;
+    }
+
+    /**
+     * @return the lstBorraEC
+     */
+    public List<BancosEstadoCtaDto> getLstBorraEC() {
+        return lstBorraEC;
+    }
+
+    /**
+     * @param lstBorraEC the lstBorraEC to set
+     */
+    public void setLstBorraEC(List<BancosEstadoCtaDto> lstBorraEC) {
+        this.lstBorraEC = lstBorraEC;
+    }
+
+   
+
+   
+
+}

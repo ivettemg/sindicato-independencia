@@ -1,0 +1,47 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="http://java.sun.com/jsf/html"
+                xmlns:f="http://java.sun.com/jsf/core"
+                xmlns:ui="http://java.sun.com/jsf/facelets"
+                xmlns:p="http://primefaces.org/ui">
+
+
+   
+    <h:form id="frmBuscaEmpleado">
+        <p:panelGrid id="pgBusquedaUsr" columns ="3" style="border:0px !important; background:none; "  styleClass="FormContent"
+                     layout="grid"  >
+
+            <h:outputText value="CLAVE DE EMPLEADO: " style="font-weight: bold"/>  
+            <p:inputText id="baBuClave" value="#{repEmpleadoBean.claveEmpleado}" >
+                <p:ajax event="blur" listener="#{repEmpleadoBean.buscaEmpleado}" 
+                        update=":frmDatosEmpl, :frmBuscaEmpleado:pgBusquedaUsr2,  
+                        :frmBuscaEmpleado:msjBusqueda, :frmDevolucionesAhorro, :frmAhorros,  
+                        :frmCredsEmpleado, :frmAvalCreditos, :frmBtnsNotas, :frmPagos" />
+            </p:inputText>
+
+
+
+            <p:selectOneMenu id="somBuEmpresas"
+                             value="#{repEmpleadoBean.empresa}" converter="empConverter"
+                             styleClass="ui-inputfield ui-widget ui-state-default ui-corner-all" >
+                <f:selectItem itemLabel="Seleccione" itemValue="" /> 
+                <f:selectItems value="#{repEmpleadoBean.empresas}" var="emp"  
+                               itemLabel="#{emp.empAbreviacion}" itemValue="#{emp}"></f:selectItems>
+                <p:ajax listener="#{repEmpleadoBean.buscaEmpleado}"
+                        update=":frmDatosEmpl, :frmBuscaEmpleado:pgBusquedaUsr2,  
+                        :frmBuscaEmpleado:msjBusqueda, :frmDevolucionesAhorro, :frmAhorros,  
+                        :frmCredsEmpleado, :frmAvalCreditos, :frmBtnsNotas, :frmPagos"
+                        />  
+
+            </p:selectOneMenu> 
+            
+             <p:messages id="msjBusqueda" for="msjBusqueda"/>
+            <p:spacer height="50" />
+        </p:panelGrid>
+         <p:panelGrid id="pgBusquedaUsr2" columns ="3" style="border:0px !important; background:none; "  styleClass="FormContent"
+                           layout="grid"  >
+             <h:outputText id = "otLblEst" value="Estatus: " style="font-weight: bold" rendered="#{repEmpleadoBean.rdrFieldSets}"/>  
+             <h:outputText id= "otEst" value="#{repEmpleadoBean.estEmpleado}" rendered="#{repEmpleadoBean.rdrFieldSets}"/>  
+         </p:panelGrid>
+        
+    </h:form>    
+</ui:composition>

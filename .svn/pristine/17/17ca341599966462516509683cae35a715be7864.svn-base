@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-configuration PUBLIC "-//Hibernate/Hibernate Configuration DTD 3.0//EN" "http://hibernate.sourceforge.net/hibernate-configuration-3.0.dtd">
+<hibernate-configuration>
+  <session-factory>
+    <property name="hibernate.dialect">org.hibernate.dialect.MySQLDialect</property>
+    <property name="hibernate.connection.driver_class">com.mysql.jdbc.Driver</property>
+   <!--  <property name="hibernate.connection.url">jdbc:mysql://localhost:3306/sindicato?zeroDateTimeBehavior=convertToNull&amp;autoReconnect=true</property>
+   <property name="hibernate.connection.username">root</property>
+    <property name="hibernate.connection.password">admin</property>
+    <property name="hibernate.connection.url">jdbc:mysql://cajaindependencia.com:3306/cajainde_sindicato?zeroDateTimeBehavior=convertToNull</property>
+    <property name="hibernate.connection.username">cajainde_root</property>
+    <property name="hibernate.connection.password">adm1n0143#</property>-->
+    <property name="hibernate.connection.url">jdbc:mysql://209.58.143.97:3306/Sindicato?zeroDateTimeBehavior=convertToNull&amp;autoReconnect=true</property>
+    <property name="hibernate.connection.username">admin_sindicato</property>
+    <property name="hibernate.connection.password">hvf850K#</property>
+    <property name="hibernate.connection.isolation">2</property>
+    
+  <property name="hibernate.c3p0.min_size">5</property>
+  <property name="hibernate.c3p0.max_size">15</property>
+  <property name="hibernate.c3p0.timeout">300</property>
+  <property name="hibernate.c3p0.max_statements">20</property>
+  <property name="hibernate.c3p0.idle_test_period">3000</property>
+    
+    <!--<property name="hibernate.current_session_context_class">thread</property>-->
+    <property name="show_sql">true</property>
+    <property name="hbm2ddl.auto">update</property>
+     
+
+    <mapping resource="mx/com/evoti/hibernate/pojos/Beneficiarios.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Bitacora.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Rendimiento.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/EstadoCuenta.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/BancoEdocta.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Movimientos.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Solicitudes.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Pagos.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/ParentescoBen.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/BajaEmpleados.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Empresas.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/PagosEstatus.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Roles.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/BitacoraTransacciones.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Cargos.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/SolicitudEstatus.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Usuarios.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Tabulador.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/AltasCambiosHist.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/BancosConceptos.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Bancos.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/AmortizacionEstatus.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Rendimiento3.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Creditos.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Productos.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/SolicitudAvales.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/CreditosFinal.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Imagenes.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Devoluciones.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/UsuariosResp.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Catorcenas.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/ArchivosHistorial.hbm.xml"/>
+    <mapping resource="mx/com/evoti/hibernate/pojos/Amortizacion.hbm.xml"/>
+  </session-factory>
+</hibernate-configuration>
